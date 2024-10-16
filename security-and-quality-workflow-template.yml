@@ -1,0 +1,61 @@
+name: Security and Quality Checks
+on:
+  workflow_call:
+    inputs:
+      container-name:
+        required: true
+        type: string
+        description: "Name of the container to build and scan"
+      dockerfile-path:
+        required: true
+        type: string
+        description: "Path to the Dockerfile"
+
+jobs:
+  security-scan:
+    name: Scan container with Trivy
+    runs-on: ubuntu-latest
+    env:
+      VULNERABILITIES_RESULT: trivy-scan-results-vuln-${{ inputs.container-name }}-${{ github.sha }}.txt
+      SECRETS_RESULT: trivy-scan-results-secret-${{ inputs.container-name }}-${{ github.sha }}.txt
+      TRIVY_SCAN_RESULT: trivy-scan-results-${{ inputs.container-name }}-${{ github.sha }}.txt
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build the Docker image
+        run: docker build -t ${{ inputs.container-name }}:${{ github.sha }} -f ${{ inputs.dockerfile-path }} .
+
+      - name: Run Trivy vulnerability scanner (container)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ inputs.container-name }}:${{ github.sha }}
+          format: 'table'
+          output: ${{ env.VULNERABILITIES_RESULT }}
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Run Trivy secret scanner (repository code)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'table'
+          output: ${{ env.SECRETS_RESULT }}
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          security-checks: 'secret'
+
+      - name: Combine scan results
+        run: |
+          cat ${{ env.VULNERABILITIES_RESULT }} > ${{ env.TRIVY_SCAN_RESULT }}
+          echo "" >> ${{ env.TRIVY_SCAN_RESULT }}
+          cat ${{ env.SECRETS_RESULT }} >> ${{ env.TRIVY_SCAN_RESULT }}
+
+      - name: Upload Trivy scan results as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: trivy-scan-results-${{ inputs.container-name }}-${{ github.sha }}
+          path: ${{ env.TRIVY_SCAN_RESULT }}
