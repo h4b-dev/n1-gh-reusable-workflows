@@ -1,0 +1,104 @@
+name: SonarCloud Quality Code Analysis
+on:
+  workflow_call:
+    inputs:
+      sonar-project-key:
+        required: true
+        type: string
+        description: "SonarCloud project key"
+      sonar-organization:
+        required: true
+        type: string
+        description: "SonarCloud organization"
+      test-project-path:
+        required: true
+        type: string
+        description: "Path to the test project"
+      config-secrets-file:
+        required: false
+        type: string
+        description: "Path to the configuration file to update with secrets"
+      env-name:
+        required: true
+        type: string
+        description: "Environment name"
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      GH_TOKEN:
+        required: true
+      CI_SECRET_SETTINGS:
+        required: false
+        description: "Appsettings for the test project"
+
+jobs:
+  sonarcloud-analysis:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env-name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache SonarCloud scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v4
+        with:
+          path: ./.sonar/scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
+
+      - name: Install SonarCloud scanner
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p ./.sonar/scanner
+          dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
+        
+      - name: Create Appsettings for test project
+        id: create-json
+        uses: jsdaniell/create-json@1.1.2
+        with:
+          name: ${{ inputs.config-secrets-file }}
+          json: ${{ secrets.CI_SECRET_SETTINGS }}
+
+      - name: Build and test with coverage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        shell: bash
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/
+          
+          ./.sonar/scanner/dotnet-sonarscanner begin /k:"${{ inputs.sonar-project-key }}" /o:"${{ inputs.sonar-organization }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/coverage.opencover.xml" \
+            /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx" \
+            /d:sonar.security.injection="true" \
+            /d:sonar.javascript.file.suffixes=".js,.jsx,.mjs,.ts,.tsx" \
+            /d:sonar.csharp.file.suffixes=".cs,.cshtml"
+          
+          dotnet build
+          
+          dotnet test --configuration Release /p:CollectCoverage=true \
+            /p:CoverletOutput=$GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/coverage.opencover.xml \
+            /p:CoverletOutputFormat=opencover \
+            /p:CopyLocalLockFileAssemblies=true --logger trx --results-directory ./TestResults
+          
+          ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-and-test-results
+          path: |
+            TestResults
+            ${{ github.workspace }}/tests/${{ inputs.test-project-path }}/coverage.opencover.xml
