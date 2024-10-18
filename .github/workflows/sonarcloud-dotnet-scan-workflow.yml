@@ -14,22 +14,18 @@ on:
         required: true
         type: string
         description: "Path to the test project"
-      config-secrets-file:
+      app-settings-file:
         required: false
         type: string
-        description: "Path to the configuration file to update with secrets"
+        description: "Path to the app settings file"
+      app-settings-content:
+        required: true
+        type: string
+        description: "App settings content"
       env-name:
         required: true
         type: string
         description: "Environment name"
-    secrets:
-      SONAR_TOKEN:
-        required: true
-      GH_TOKEN:
-        required: true
-      CI_SECRET_SETTINGS:
-        required: false
-        description: "Appsettings for the test project"
 
 jobs:
   sonarcloud-analysis:
@@ -60,14 +56,12 @@ jobs:
         run: |
           mkdir -p ./.sonar/scanner
           dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
-        
-      - name: Create Appsettings for test project
-        id: create-json
-        uses: jsdaniell/create-json@1.1.2
-        with:
-          name: ${{ inputs.config-secrets-file }}
-          json: ${{ secrets.CI_SECRET_SETTINGS }}
-
+          
+      - name: Decode and create settings file
+        run: |
+          # Decode the app settings content and write it to the app settings file
+          echo "${{ inputs.app-settings-content }}" | base64 -d > ${{ inputs.app-settings-file }}
+            
       - name: Build and test with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
