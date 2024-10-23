@@ -87,9 +87,10 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: bash
         run: |
+          cd ${{ inputs.build-path }}
           mkdir -p $GITHUB_WORKSPACE/${{ inputs.test-project-path }}/
           
-          ./.sonar/scanner/dotnet-sonarscanner begin /k:"${{ inputs.sonar-project-key }}" /o:"${{ inputs.sonar-organization }}" \
+          $GITHUB_WORKSPACE/.sonar/scanner/dotnet-sonarscanner begin /k:"${{ inputs.sonar-project-key }}" /o:"${{ inputs.sonar-organization }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml" \
@@ -98,14 +99,14 @@ jobs:
             /d:sonar.javascript.file.suffixes=".js,.jsx,.mjs,.ts,.tsx" \
             /d:sonar.csharp.file.suffixes=".cs,.cshtml"
           
-          dotnet build ${{ inputs.build-path }}
+          dotnet build
           
           dotnet test $GITHUB_WORKSPACE/${{ inputs.test-project-path }} --configuration Release /p:CollectCoverage=true \
             /p:CoverletOutput=$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml \
             /p:CoverletOutputFormat=opencover \
             /p:CopyLocalLockFileAssemblies=true --logger trx --results-directory ./TestResults
           
-          ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          $GITHUB_WORKSPACE/.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
       - name: Upload test results
         if: always()
