@@ -82,7 +82,7 @@ jobs:
             /d:sonar.javascript.file.suffixes=".js,.jsx,.mjs,.ts,.tsx" \
             /d:sonar.csharp.file.suffixes=".cs,.cshtml"
           
-          dotnet build
+          dotnet build src
           
           dotnet test --configuration Release /p:CollectCoverage=true \
             /p:CoverletOutput=$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml \
