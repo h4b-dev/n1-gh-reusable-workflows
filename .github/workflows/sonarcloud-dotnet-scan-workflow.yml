@@ -26,6 +26,11 @@ on:
         required: true
         type: string
         description: "Environment name"
+      build_path:
+        required: false
+        type: string
+        description: "Path to build project"
+        default: "."
 
 jobs:
   sonarcloud-analysis:
@@ -33,7 +38,7 @@ jobs:
     environment: ${{ inputs.env-name }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
@@ -56,12 +61,12 @@ jobs:
         run: |
           mkdir -p ./.sonar/scanner
           dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
-          
+
       - name: Decode and create settings file
         run: |
           # Decode the app settings content and write it to the app settings file
           echo "${{ inputs.app-settings-content }}" | base64 -d > ${{ inputs.app-settings-file }}
-          
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -69,7 +74,7 @@ jobs:
           source-url: https://nuget.pkg.github.com/h4b-dev/index.json
         env:
           NUGET_AUTH_TOKEN: ${{secrets.NUGET_API_KEY}}
-          
+
       - name: Build and test with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -77,9 +82,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p $GITHUB_WORKSPACE/${{ inputs.test-project-path }}/
-          ls -la $GITHUB_WORKSPACE/${{ inputs.test-project-path }}
-          ls -la $GITHUB_WORKSPACE
-          ls -la .
           
           ./.sonar/scanner/dotnet-sonarscanner begin /k:"${{ inputs.sonar-project-key }}" /o:"${{ inputs.sonar-organization }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
@@ -90,7 +92,7 @@ jobs:
             /d:sonar.javascript.file.suffixes=".js,.jsx,.mjs,.ts,.tsx" \
             /d:sonar.csharp.file.suffixes=".cs,.cshtml"
           
-          dotnet build src
+          dotnet build ${{ inputs.build_path }}
           
           dotnet test $GITHUB_WORKSPACE/${{ inputs.test-project-path }} --configuration Release /p:CollectCoverage=true \
             /p:CoverletOutput=$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml \
@@ -101,7 +103,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-and-test-results
           path: |
