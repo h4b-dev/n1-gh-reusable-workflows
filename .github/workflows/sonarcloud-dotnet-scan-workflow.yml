@@ -61,7 +61,15 @@ jobs:
         run: |
           # Decode the app settings content and write it to the app settings file
           echo "${{ inputs.app-settings-content }}" | base64 -d > ${{ inputs.app-settings-file }}
-            
+          
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+          source-url: https://nuget.pkg.github.com/h4b-dev/index.json
+        env:
+          NUGET_AUTH_TOKEN: ${{secrets.NUGET_API_KEY}}
+          
       - name: Build and test with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
