@@ -61,28 +61,39 @@ jobs:
         run: |
           # Decode the app settings content and write it to the app settings file
           echo "${{ inputs.app-settings-content }}" | base64 -d > ${{ inputs.app-settings-file }}
-            
+          
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+          source-url: https://nuget.pkg.github.com/h4b-dev/index.json
+        env:
+          NUGET_AUTH_TOKEN: ${{secrets.NUGET_API_KEY}}
+          
       - name: Build and test with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: bash
         run: |
-          mkdir -p $GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/
+          mkdir -p $GITHUB_WORKSPACE/${{ inputs.test-project-path }}/
+          ls -la $GITHUB_WORKSPACE/${{ inputs.test-project-path }}
+          ls -la $GITHUB_WORKSPACE
+          ls -la .
           
           ./.sonar/scanner/dotnet-sonarscanner begin /k:"${{ inputs.sonar-project-key }}" /o:"${{ inputs.sonar-organization }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.host.url="https://sonarcloud.io" \
-            /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/coverage.opencover.xml" \
+            /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml" \
             /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx" \
             /d:sonar.security.injection="true" \
             /d:sonar.javascript.file.suffixes=".js,.jsx,.mjs,.ts,.tsx" \
             /d:sonar.csharp.file.suffixes=".cs,.cshtml"
           
-          dotnet build
+          dotnet build src
           
-          dotnet test --configuration Release /p:CollectCoverage=true \
-            /p:CoverletOutput=$GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/coverage.opencover.xml \
+          dotnet test $GITHUB_WORKSPACE/${{ inputs.test-project-path }} --configuration Release /p:CollectCoverage=true \
+            /p:CoverletOutput=$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml \
             /p:CoverletOutputFormat=opencover \
             /p:CopyLocalLockFileAssemblies=true --logger trx --results-directory ./TestResults
           
@@ -95,4 +106,4 @@ jobs:
           name: coverage-and-test-results
           path: |
             TestResults
-            ${{ github.workspace }}/tests/${{ inputs.test-project-path }}/coverage.opencover.xml
+            ${{ github.workspace }}/${{ inputs.test-project-path }}/coverage.opencover.xml
