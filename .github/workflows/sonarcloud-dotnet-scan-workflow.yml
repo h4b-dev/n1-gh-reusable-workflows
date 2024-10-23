@@ -68,12 +68,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: bash
         run: |
-          mkdir -p $GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/
+          mkdir -p $GITHUB_WORKSPACE/${{ inputs.test-project-path }}/
           
           ./.sonar/scanner/dotnet-sonarscanner begin /k:"${{ inputs.sonar-project-key }}" /o:"${{ inputs.sonar-organization }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.host.url="https://sonarcloud.io" \
-            /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/coverage.opencover.xml" \
+            /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml" \
             /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx" \
             /d:sonar.security.injection="true" \
             /d:sonar.javascript.file.suffixes=".js,.jsx,.mjs,.ts,.tsx" \
@@ -82,7 +82,7 @@ jobs:
           dotnet build
           
           dotnet test --configuration Release /p:CollectCoverage=true \
-            /p:CoverletOutput=$GITHUB_WORKSPACE/tests/${{ inputs.test-project-path }}/coverage.opencover.xml \
+            /p:CoverletOutput=$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml \
             /p:CoverletOutputFormat=opencover \
             /p:CopyLocalLockFileAssemblies=true --logger trx --results-directory ./TestResults
           
@@ -95,4 +95,4 @@ jobs:
           name: coverage-and-test-results
           path: |
             TestResults
-            ${{ github.workspace }}/tests/${{ inputs.test-project-path }}/coverage.opencover.xml
+            ${{ github.workspace }}/${{ inputs.test-project-path }}/coverage.opencover.xml
