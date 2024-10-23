@@ -92,7 +92,7 @@ jobs:
           
           dotnet build src
           
-          dotnet test --configuration Release /p:CollectCoverage=true \
+          dotnet test $GITHUB_WORKSPACE/${{ inputs.test-project-path }} --configuration Release /p:CollectCoverage=true \
             /p:CoverletOutput=$GITHUB_WORKSPACE/${{ inputs.test-project-path }}/coverage.opencover.xml \
             /p:CoverletOutputFormat=opencover \
             /p:CopyLocalLockFileAssemblies=true --logger trx --results-directory ./TestResults
