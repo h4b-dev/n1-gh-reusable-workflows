@@ -35,7 +35,7 @@ on:
         required: false
         type: boolean
         description: "Used for run step setup-dotnet with custom nuget"
-        default: 'false'
+        default: false
 
 jobs:
   sonarcloud-analysis:
@@ -74,7 +74,7 @@ jobs:
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
-        if: inputs.use-nuget-config == 'true'
+        if: inputs.use-nuget-config == true
         with:
           dotnet-version: '7.0.x'
           source-url: https://nuget.pkg.github.com/h4b-dev/index.json
