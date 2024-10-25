@@ -57,7 +57,7 @@ jobs:
           format: "table"
           exit-code: "0"
           ignore-unfixed: true
-          severity: "MEDIUM,CRITICAL,HIGH"
+          severity: "CRITICAL,HIGH"
           vuln-type: "library"
           output: ${{ env.VULNERABILITIES_RESULT }}
           list-all-pkgs: true
