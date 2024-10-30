@@ -10,11 +10,16 @@ on:
         required: true
         type: string
         description: "Path to the Dockerfile"
+      env-name:
+        required: false
+        type: string
+        description: "Environment name of the github"
 
 jobs:
   security-scan:
     name: Scan container with Trivy
     runs-on: ubuntu-latest
+    environment: ${{ inputs.env-name || null }}
     env:
       VULNERABILITIES_RESULT: trivy-scan-results-vuln-${{ inputs.container-name }}-${{ github.sha }}.txt
       SECRETS_RESULT: trivy-scan-results-secret-${{ inputs.container-name }}-${{ github.sha }}.txt
@@ -25,15 +30,15 @@ jobs:
 
       - name: Set up Docker
         uses: docker/setup-buildx-action@v2
-
+            
       - name: Build the Docker image
         run: |
           BUILD_ARGS=""
           if [ -n "${{ secrets.NUGET_USER_NAME }}" ]; then
             BUILD_ARGS="$BUILD_ARGS --build-arg NUGET_USER_NAME=${{ secrets.NUGET_USER_NAME }}"
           fi
-          if [ -n "${{ secrets.NUGET_AUTH_PASS }}" ]; then
-            BUILD_ARGS="$BUILD_ARGS --build-arg NUGET_AUTH_PASS=${{ secrets.NUGET_AUTH_PASS }}"
+          if [ -n "${{ secrets.NUGET_USER_PASS }}" ]; then
+            BUILD_ARGS="$BUILD_ARGS --build-arg NUGET_AUTH_PASS=${{ secrets.NUGET_USER_PASS }}"
           fi
           docker build $BUILD_ARGS -t ${{ inputs.container-name }}:${{ github.sha }} -f ${{ inputs.dockerfile-path }} .
 
