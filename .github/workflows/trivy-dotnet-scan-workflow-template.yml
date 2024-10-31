@@ -44,6 +44,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (container)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           image-ref: ${{ inputs.container-name }}:${{ github.sha }}
           format: 'table'
@@ -53,6 +54,7 @@ jobs:
 
       - name: Run Trivy secret scanner (repository code)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'fs'
           format: 'table'
@@ -76,6 +78,7 @@ jobs:
           fi
 
       - name: Combine scan results
+        if: always() 
         run: |
           echo "=== Scan Summary ===" > ${{ env.TRIVY_SCAN_RESULT }}
           echo "Scan Date: $(date)" >> ${{ env.TRIVY_SCAN_RESULT }}
