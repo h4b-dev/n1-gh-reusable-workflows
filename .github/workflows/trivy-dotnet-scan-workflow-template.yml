@@ -61,11 +61,40 @@ jobs:
           ignore-unfixed: true
           security-checks: 'secret'
 
+      - name: Check vulnerability scan results
+        if: always()
+        run: |
+          if [ ! -s ${{ env.VULNERABILITIES_RESULT }} ] || [ $(cat ${{ env.VULNERABILITIES_RESULT }} | wc -l) -le 1 ]; then
+            echo "✅ No vulnerabilities found in dependency scan" > ${{ env.VULNERABILITIES_RESULT }}
+          fi
+
+      - name: Check secrets scan results
+        if: always()
+        run: |
+          if [ ! -s ${{ env.SECRETS_RESULT }} ] || [ $(cat ${{ env.SECRETS_RESULT }} | wc -l) -le 1 ]; then
+            echo "✅ No secrets or vulnerabilities found in package scan" > ${{ env.SECRETS_RESULT }}
+          fi
+
       - name: Combine scan results
         run: |
+          echo "=== Scan Summary ===" > ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Scan Date: $(date)" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Repository: ${{ github.repository }}" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Branch: ${{ github.ref }}" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Commit: ${{ github.sha }}" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "=== Dependency Scan Results ===" >> ${{ env.TRIVY_SCAN_RESULT }}
           cat ${{ env.VULNERABILITIES_RESULT }} > ${{ env.TRIVY_SCAN_RESULT }}
           echo "" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "=== Security Scan Results ===" >> ${{ env.TRIVY_SCAN_RESULT }}
           cat ${{ env.SECRETS_RESULT }} >> ${{ env.TRIVY_SCAN_RESULT }}
+
+      - name: Check for critical vulnerabilities
+        if: always()
+        run: |
+          if grep -q "CRITICAL" ${{ env.TRIVY_SCAN_RESULT }}; then
+            echo "❌ Se encontraron vulnerabilidades críticas"
+            exit 1
+          fi
 
       - name: Upload Trivy scan results as artifact
         uses: actions/upload-artifact@v3
