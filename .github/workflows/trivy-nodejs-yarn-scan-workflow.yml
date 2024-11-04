@@ -13,6 +13,26 @@ on:
         type: string
         required: true
         default: "."
+      requires-gh-npm-config:
+        description: "requires GitHub-NPM configuration"
+        type: boolean
+        required: false
+        default: false
+      registry-domain:
+        description: "Domain of the npm registry to use"
+        type: string
+        required: false
+        default: "npm.pkg.github.com"
+      scope:
+        description: "Scope of the npm packages to install"
+        type: string
+        required: false
+        default: "@h4b-dev"
+      gh-pat:
+        description: "GitHub Personal Access Token"
+        type: string
+        required: false
+        default: ""
 
 jobs:
   trivy-scan:
@@ -24,6 +44,7 @@ jobs:
       SECRETS_RESULT: trivy-scan-results-secret-${{ github.sha }}.txt
       TRIVY_SCAN_RESULT: trivy-scan-results-${{ github.sha }}.txt
       YARN_AUDIT_RESULT: yarn-audit-${{ github.sha }}.json
+      GH_PAT: ${{ inputs.gh-pat }}
 
     steps:
       - name: Checkout code
@@ -32,7 +53,21 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ inputs['node-version'] }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Set environment variables
+        if: ${{ inputs.requires-gh-npm-config }}
+        run: |
+          export GH_PAT=$(echo $GH_PAT | base64 -di | base64 -di)
+          echo ::add-mask::$GH_PAT
+          echo "GH_PAT=$GH_PAT" >> $GITHUB_ENV
+
+      - name: Set up NPM
+        if: ${{ inputs.requires-gh-npm-config }}
+        run: |
+          touch .npmrc
+          echo ${{ inputs.scope }}:registry=https://${{ inputs.registry-domain }} >> .npmrc
+          echo //${{ inputs.registry-domain }}/:_authToken=${{ env.GH_PAT }} >> .npmrc
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -47,13 +82,17 @@ jobs:
         run: |
           yarn audit --json > ${{ env.YARN_AUDIT_RESULT }} || true
 
+      - name: Remove .npmrc file
+        if: ${{ inputs.requires-gh-npm-config }}
+        run: rm -f .npmrc
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
         id: vuln-scan
         with:
           scan-type: "fs"
-          scan-ref: ${{ inputs['scan-path'] }}
+          scan-ref: ${{ inputs.scan-path }}
           format: "table"
           exit-code: "0"
           ignore-unfixed: true
