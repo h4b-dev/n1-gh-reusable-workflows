@@ -28,6 +28,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Cache Trivy vulnerability database
+        uses: actions/cache@v3
+        with:
+          path: .trivy
+          key: trivy-cache-${{ runner.os }}-${{ hashFiles('**/Dockerfile') }}
+          restore-keys: |
+            trivy-cache-${{ runner.os }}-
+
       - name: Set up Docker
         uses: docker/setup-buildx-action@v2
             
@@ -51,6 +59,7 @@ jobs:
           output: ${{ env.VULNERABILITIES_RESULT }}
           exit-code: '0'
           ignore-unfixed: true
+          cache-dir: .trivy
 
       - name: Run Trivy secret scanner (repository code)
         uses: aquasecurity/trivy-action@master
@@ -62,6 +71,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
           security-checks: 'secret'
+          cache-dir: .trivy
 
       - name: Check vulnerability scan results
         if: always()
