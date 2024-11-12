@@ -74,7 +74,7 @@ jobs:
       - name: Decode and create settings file
         run: |
           # Decode the app settings content and write it to the app settings file
-          echo "${{ inputs.app-settings-content }}" | base64 -d > ${{ inputs.app-settings-file }}
+          echo '${{ inputs.app-settings-content }}' | base64 --decode | tr -d '\r' > ${{ inputs.app-settings-file }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
