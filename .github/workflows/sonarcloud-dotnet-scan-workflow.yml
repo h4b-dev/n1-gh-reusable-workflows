@@ -19,7 +19,7 @@ on:
         type: string
         description: "Path to the app settings file"
       app-settings-content:
-        required: true
+        required: false
         type: string
         description: "App settings content"
       env-name:
@@ -41,6 +41,10 @@ on:
         type: string
         description: "Version of dotnet to setup"
         default: "7.0.x"
+      env-variables:
+        required: false
+        type: string
+        description: "Environment variables map. Format: VARIABLE_NAME=value,VARIABLE_NAME=secret:SECRET_NAME"
 jobs:
   sonarcloud-analysis:
     runs-on: ubuntu-latest
@@ -72,9 +76,72 @@ jobs:
           dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
 
       - name: Decode and create settings file
+        if: inputs.app-settings-file != '' && inputs.app-settings-content != ''
+        shell: bash
+        env:
+          SETTINGS_CONTENT: ${{ inputs.app-settings-content }}
         run: |
-          # Decode the app settings content and write it to the app settings file
-          echo '${{ inputs.app-settings-content }}' | base64 --decode | tr -d '\r' > ${{ inputs.app-settings-file }}
+          # Create temporary file for decoded content
+          TEMP_FILE=$(mktemp)
+          
+          # Decode content and ensure proper JSON formatting
+          echo "$SETTINGS_CONTENT" | base64 --decode | tr -d '\r' > "$TEMP_FILE"
+          
+          # Verify if the content is valid JSON
+          if ! jq empty "$TEMP_FILE" 2>/dev/null; then
+            echo "Error: Invalid JSON content detected"
+            cat "$TEMP_FILE"
+            exit 1
+          fi
+          
+          # If valid, move to final destination
+          mv "$TEMP_FILE" "${{ inputs.app-settings-file }}"
+      
+      - name: Parse and set environment variables
+        if: inputs.env-variables != ''
+        run: |
+          # Create JSON with all secrets
+          echo '${{ toJSON(secrets) }}' > all_secrets.json
+          # Create function to get secret value from JSON
+          get_secret_value() {
+            local secret_name=$1
+            value=$(jq -r ".[\"$secret_name\"]" all_secrets.json)
+            if [ "$value" = "null" ]; then
+              echo ""
+            else
+              echo "$value"
+            fi
+          }
+          # Remove line breaks in the input of variables
+          sanitized_env_variables=$(echo '${{ inputs.env-variables }}' | tr -d '\n')
+          IFS=',' read -ra MAPPINGS <<< "$sanitized_env_variables"
+          for mapping in "${MAPPINGS[@]}"; do
+            # Split the mapping into the new variable and the value part
+            new_var="${mapping%%=*}"
+            source_or_value="${mapping#*=}"
+            # Remove double quotes from the value
+            source_or_value=$(echo "$source_or_value" | tr -d '"')
+            echo "New var: $new_var and source or value: $source_or_value"
+      
+            # Check if the value contains 'secret:'
+            if [[ "$source_or_value" == secret:* ]]; then
+              # Remove 'secret:' to get the secret name
+              secret_name="${source_or_value#secret:}"
+              echo "Looking for secret: $secret_name"
+              # Get the secret value from the JSON
+              secret_value=$(get_secret_value "$secret_name")
+              if [ ! -z "$secret_value" ]; then
+                echo "$new_var=$secret_value" >> $GITHUB_ENV
+                echo "✅ Set $new_var from secret $secret_name"
+              else
+                echo "Warning: Secret $secret_name not found"
+              fi
+            else
+              # If it doesn't contain 'secret:', assign the value directly
+              echo "$new_var=$source_or_value" >> $GITHUB_ENV
+              echo "✅ Set $new_var with direct value"
+            fi
+          done
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
