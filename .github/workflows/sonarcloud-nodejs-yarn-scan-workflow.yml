@@ -3,13 +3,15 @@ on:
   workflow_call:
     inputs:
       sonar-project-key:
-        required: true
+        required: false
         type: string
-        description: "SonarCloud project key"
+        description: "SonarCloud project key (required if sonar-project.properties does not exist)"
+        default: ""
       sonar-organization:
-        required: true
+        required: false
         type: string
-        description: "SonarCloud organization"
+        description: "SonarCloud organization (required if sonar-project.properties does not exist)"
+        default: "n1co"
       env-name:
         required: true
         type: string
@@ -48,7 +50,26 @@ jobs:
         working-directory: ${{ inputs.build-path }}
         run: yarn test:coverage
 
-      - name: SonarCloud Scan
+      - name: Check for sonar-project.properties file
+        id: check_sonar
+        run: |
+          if [[ -f "./sonar-project.properties" ]]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: SonarCloud Scan with sonar-project.properties
+        if: steps.check_sonar.outputs.exists == 'true'
+        uses: SonarSource/sonarcloud-github-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: ${{ inputs.build-path }}
+
+      - name: SonarCloud Scan without sonar-project.properties
+        if: steps.check_sonar.outputs.exists == 'false'
         uses: SonarSource/sonarcloud-github-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
