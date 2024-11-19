@@ -142,6 +142,9 @@ jobs:
               echo "✅ Set $new_var with direct value"
             fi
           done
+          
+          # Remove the file all_secrets.json used previously
+          rm -f all_secrets.json
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
