@@ -1,0 +1,135 @@
+name: Trivy Security and Quality Checks
+on:
+  workflow_call:
+    inputs:
+      env-name:
+        required: false
+        type: string
+        description: "Environment name of the github"
+      build-path:
+        required: false
+        type: string
+        description: "Path to build project"
+        default: "."
+      use-nuget-config:
+        required: false
+        type: boolean
+        description: "Use NuGet configuration"
+        default: false
+      dotnet-version:
+        required: false
+        type: string
+        description: "Version of dotnet to setup"
+        default: "7.0.x"
+
+jobs:
+  security-scan:
+    name: Scan container with Trivy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env-name || null }}
+    env:
+      VULNERABILITIES_RESULT: trivy-scan-results-vuln-${{ github.sha }}.txt
+      SECRETS_RESULT: trivy-scan-results-secret-${{ github.sha }}.txt
+      TRIVY_SCAN_RESULT: trivy-scan-results-${{ github.sha }}.txt
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Trivy vulnerability database
+        uses: actions/cache@v3
+        with:
+          path: .trivy
+          key: trivy-cache-${{ runner.os }}-${{ hashFiles('**/Dockerfile') }}
+          restore-keys: |
+            trivy-cache-${{ runner.os }}-
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        if: inputs.use-nuget-config == true
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          source-url: https://nuget.pkg.github.com/h4b-dev/index.json
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.NUGET_API_KEY }}
+      
+      - name: Restore dependencies
+        run: dotnet restore ${{ inputs.build-path }}
+        
+      - name: Build
+        run: dotnet build ${{ inputs.build-path }} --configuration Release --no-restore
+        
+      - name: Package
+        run: dotnet pack --no-build --configuration Release ${{ inputs.build-path }} --output ./nupkg
+
+      - name: Run Trivy vulnerability scanner (project)
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'library'
+          output: ${{ env.VULNERABILITIES_RESULT }}
+          list-all-pkgs: true
+
+      - name: Run Trivy secret scanner (repository code)
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: 'fs'
+          format: 'table'
+          output: ${{ env.SECRETS_RESULT }}
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          security-checks: 'secret'
+          cache-dir: .trivy
+
+      - name: Check vulnerability scan results
+        if: always()
+        run: |
+          if [ ! -s ${{ env.VULNERABILITIES_RESULT }} ] || [ $(cat ${{ env.VULNERABILITIES_RESULT }} | wc -l) -le 1 ]; then
+            echo "✅ No vulnerabilities found in dependency scan" > ${{ env.VULNERABILITIES_RESULT }}
+          fi
+
+      - name: Check secrets scan results
+        if: always()
+        run: |
+          if [ ! -s ${{ env.SECRETS_RESULT }} ] || [ $(cat ${{ env.SECRETS_RESULT }} | wc -l) -le 1 ]; then
+            echo "✅ No secrets or vulnerabilities found in package scan" > ${{ env.SECRETS_RESULT }}
+          fi
+
+      - name: Combine scan results
+        if: always() 
+        run: |
+          echo "=== Scan Summary ===" > ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Scan Date: $(date)" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Repository: ${{ github.repository }}" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Branch: ${{ github.ref }}" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "Commit: ${{ github.sha }}" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "=== Dependency Scan Results ===" >> ${{ env.TRIVY_SCAN_RESULT }}
+          cat ${{ env.VULNERABILITIES_RESULT }} > ${{ env.TRIVY_SCAN_RESULT }}
+          echo "" >> ${{ env.TRIVY_SCAN_RESULT }}
+          echo "=== Security Scan Results ===" >> ${{ env.TRIVY_SCAN_RESULT }}
+          cat ${{ env.SECRETS_RESULT }} >> ${{ env.TRIVY_SCAN_RESULT }}
+
+      - name: Check for critical vulnerabilities
+        if: always()
+        run: |
+          # Busca la línea con el total de vulnerabilidades críticas y verifica si el número es mayor que 0
+          CRITICAL_COUNT=$(grep -E "CRITICAL: [1-9][0-9]*" ${{ env.TRIVY_SCAN_RESULT }} | wc -l)
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "❌ Se encontraron vulnerabilidades críticas."
+            exit 1
+          else
+            echo "✅ No critical vulnerabilities found."
+          fi
+    
+      - name: Upload Trivy scan results as artifact
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: trivy-scan-results-${{ github.sha }}
+          path: ${{ env.TRIVY_SCAN_RESULT }}
