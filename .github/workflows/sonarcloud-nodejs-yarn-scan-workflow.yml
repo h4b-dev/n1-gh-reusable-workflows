@@ -12,6 +12,11 @@ on:
         type: string
         description: "SonarCloud organization (required if sonar-project.properties does not exist)"
         default: "n1co"
+      requires-node-setup-and-install-dependencies:
+        description: "requires Node.js setup and dependencies installation"
+        type: boolean
+        required: false
+        default: true
       env-name:
         required: true
         type: string
@@ -35,14 +40,17 @@ jobs:
 
     steps:
       - name: Checkout code
+        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
 
       - name: Install dependencies
+        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         working-directory: ${{ inputs.build-path }}
         run: yarn install --frozen-lockfile
 

@@ -13,6 +13,11 @@ on:
         type: string
         required: true
         default: "."
+      requires-node-setup-and-install-dependencies:
+        description: "requires Node.js setup and dependencies installation"
+        type: boolean
+        required: false
+        default: true
       requires-gh-npm-config:
         description: "requires GitHub-NPM configuration"
         type: boolean
@@ -48,9 +53,11 @@ jobs:
 
     steps:
       - name: Checkout code
+        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         uses: actions/checkout@v4
 
       - name: Set up Node.js
+        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
@@ -70,6 +77,7 @@ jobs:
           echo //${{ inputs.registry-domain }}/:_authToken=${{ env.GH_PAT }} >> .npmrc
 
       - name: Install dependencies
+        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         run: yarn install --frozen-lockfile
 
       - name: Initialize result files
