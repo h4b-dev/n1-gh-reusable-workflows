@@ -1,4 +1,5 @@
 name: SonarCloud Quality Code Analysis for Node.js with Yarn
+
 on:
   workflow_call:
     inputs:
@@ -12,11 +13,6 @@ on:
         type: string
         description: "SonarCloud organization (required if sonar-project.properties does not exist)"
         default: "n1co"
-      requires-node-setup-and-install-dependencies:
-        description: "requires Node.js setup and dependencies installation"
-        type: boolean
-        required: false
-        default: true
       env-name:
         required: true
         type: string
@@ -31,26 +27,59 @@ on:
         type: string
         description: "Path to build project"
         default: "."
+      requires-gh-npm-config:
+        description: "requires GitHub-NPM configuration"
+        type: boolean
+        required: false
+        default: false
+      registry-domain:
+        description: "Domain of the npm registry to use"
+        type: string
+        required: false
+        default: "npm.pkg.github.com"
+      scope:
+        description: "Scope of the npm packages to install"
+        type: string
+        required: false
+        default: "@h4b-dev"
+      gh-pat:
+        description: "GitHub Personal Access Token"
+        type: string
+        required: false
+        default: ""
 
 jobs:
   sonarcloud-analysis:
     runs-on: ubuntu-latest
     environment: ${{ inputs.env-name }}
     timeout-minutes: 30
+    env:
+      GH_PAT: ${{ inputs.gh-pat }}
 
     steps:
       - name: Checkout code
-        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
 
+      - name: Set environment variables
+        if: ${{ inputs.requires-gh-npm-config }}
+        run: |
+          export GH_PAT=$(echo $GH_PAT | base64 -di | base64 -di)
+          echo ::add-mask::$GH_PAT
+          echo "GH_PAT=$GH_PAT" >> $GITHUB_ENV
+
+      - name: Set up NPM
+        if: ${{ inputs.requires-gh-npm-config }}
+        run: |
+          touch .npmrc
+          echo ${{ inputs.scope }}:registry=https://${{ inputs.registry-domain }} >> .npmrc
+          echo //${{ inputs.registry-domain }}/:_authToken=${{ env.GH_PAT }} >> .npmrc
+
       - name: Install dependencies
-        if: ${{ inputs.requires-node-setup-and-install-dependencies }}
         working-directory: ${{ inputs.build-path }}
         run: yarn install --frozen-lockfile
 
